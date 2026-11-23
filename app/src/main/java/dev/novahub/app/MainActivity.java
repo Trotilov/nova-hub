@@ -33,6 +33,10 @@ public class MainActivity extends Activity {
         "https://raw.githubusercontent.com/Trotilov/nova-forsaken/main/nova-hub.json";
     private static final String ROYALE_MANIFEST =
         "https://raw.githubusercontent.com/Trotilov/nova-royale/main/nova-hub.json";
+    private static final String STABLE_SCRIPT =
+        "https://raw.githubusercontent.com/Trotilov/nova-forsaken/main/nova.lua";
+    private static final String BETA_SCRIPT =
+        "https://raw.githubusercontent.com/Trotilov/nova-forsaken/main/nova_beta.lua";
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
     private WebView webView;
     private SharedPreferences cache;
@@ -88,7 +92,7 @@ public class MainActivity extends Activity {
         c.setConnectTimeout(10000);
         c.setReadTimeout(12000);
         c.setRequestMethod("GET");
-        c.setRequestProperty("User-Agent", "NovaHub-Android/0.1");
+        c.setRequestProperty("User-Agent", "NovaHub-Android/0.2");
         c.setInstanceFollowRedirects(false);
         try {
             if (c.getResponseCode() != 200)
@@ -121,8 +125,13 @@ public class MainActivity extends Activity {
                     throw new IllegalArgumentException("Invalid manifest");
                 if ("forsaken".equals(project)) {
                     String url = json.optString("script_url");
-                    if (!"https://raw.githubusercontent.com/Trotilov/nova-forsaken/main/nova.lua".equals(url))
+                    if (!STABLE_SCRIPT.equals(url))
                         throw new SecurityException("Invalid script origin");
+                }
+                if ("forsaken".equals(project) && json.has("beta")) {
+                    JSONObject beta = json.getJSONObject("beta");
+                    if (!BETA_SCRIPT.equals(beta.optString("script_url")))
+                        throw new SecurityException("Invalid beta script origin");
                 }
                 cache.edit().putString("manifest_" + project, data).apply();
             } catch (Exception e) {
@@ -137,36 +146,35 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void copyLatestForsaken() {
+    private void copyForsaken(String channel) {
+        final boolean beta = "beta".equals(channel);
+        final String url = beta ? BETA_SCRIPT : STABLE_SCRIPT;
+        final String cacheKey = beta ? "forsaken_script_beta" : "forsaken_script_stable";
+        final String label = beta ? "тестовая" : "стабильная";
         executor.execute(() -> {
             String script;
             boolean offline = false;
             try {
-                String data = cache.getString("manifest_forsaken", "");
-                if (data.isEmpty()) throw new IllegalStateException("Update data missing");
-                JSONObject json = new JSONObject(data);
-                String scriptUrl = json.getString("script_url");
-                if (!"https://raw.githubusercontent.com/Trotilov/nova-forsaken/main/nova.lua".equals(scriptUrl))
-                    throw new SecurityException("Unexpected script URL");
-                script = httpGet(scriptUrl + "?v=" + System.currentTimeMillis(), 450000);
+                script = httpGet(url + "?v=" + System.currentTimeMillis(), 450000);
                 if (script.trim().length() < 30 || script.trim().startsWith("<"))
                     throw new IllegalArgumentException("Invalid script response");
-                cache.edit().putString("forsaken_script", script).apply();
+                cache.edit().putString(cacheKey, script).apply();
             } catch (Exception e) {
-                script = cache.getString("forsaken_script", "");
+                script = cache.getString(cacheKey, "");
                 offline = true;
             }
             if (script.isEmpty()) {
                 postJs("window.NovaApp && window.NovaApp.copyResult(false," +
-                    JSONObject.quote("Скрипт пока недоступен. Проверь интернет.") + ")");
+                    JSONObject.quote("Скрипт недоступен. Проверь интернет.") + ")");
                 return;
             }
             final String ready = script;
             final boolean fromCache = offline;
             runOnUiThread(() -> {
                 ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                clipboard.setPrimaryClip(ClipData.newPlainText("Forsaken NOVA", ready));
-                String message = fromCache ? "Скопирован сохранённый скрипт (офлайн)" : "Актуальный скрипт скопирован";
+                clipboard.setPrimaryClip(ClipData.newPlainText("Forsaken NOVA " + channel, ready));
+                String message = fromCache ? "Скопирована сохранённая " + label + " версия (офлайн)" :
+                    "Скопирована " + label + " версия NOVA";
                 postJs("window.NovaApp && window.NovaApp.copyResult(true," + JSONObject.quote(message) + ")");
             });
         });
@@ -201,7 +209,13 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void refresh() {
             sync("forsaken"); sync("royale");
         }
-        @JavascriptInterface public void copyScript() { copyLatestForsaken(); }
+        @JavascriptInterface public void copyScript(String channel) {
+            if (!"stable".equals(channel) && !"beta".equals(channel)) {
+                toast("Неизвестная версия скрипта");
+                return;
+            }
+            copyForsaken(channel);
+        }
         @JavascriptInterface public void launchRoyale() { MainActivity.this.launchRoyale(); }
         @JavascriptInterface public void openGitHub(String url) {
             runOnUiThread(() -> openExternal(url));
