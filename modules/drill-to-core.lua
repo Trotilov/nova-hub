@@ -169,7 +169,8 @@ section("ПОДСВЕТКА")
 toggle("ESP руды / минералов","oreESP")
 toggle("ESP сундуков / лута","lootESP")
 toggle("ESP NPC","npcESP")
-local rng=row("Дальность ESP: "..cfg.espRange.." studs",function()
+local rng
+rng=row("Дальность ESP: "..cfg.espRange.." studs",function()
  local vals={100,200,350}
  local idx=1
  for i,v in ipairs(vals) do if v==cfg.espRange then idx=i break end end
@@ -177,7 +178,8 @@ local rng=row("Дальность ESP: "..cfg.espRange.." studs",function()
  rng.Text="Дальность ESP: "..cfg.espRange.." studs"
 end)
 section("ПЕРСОНАЖ")
-local walk=row("Ускорение ходьбы: ВЫКЛ",function()
+local walk
+walk=row("Ускорение ходьбы: ВЫКЛ",function()
  cfg.speed=not cfg.speed
  walk.Text=cfg.speed and ("Ускорение ходьбы: "..cfg.walkSpeed) or "Ускорение ходьбы: ВЫКЛ"
  if not cfg.speed then
@@ -187,7 +189,8 @@ local walk=row("Ускорение ходьбы: ВЫКЛ",function()
   end
  end
 end)
-local walkVal=row("Скорость: "..cfg.walkSpeed.." (настройка)",function()
+local walkVal
+walkVal=row("Скорость: "..cfg.walkSpeed.." (настройка)",function()
  local vals={22,24,28,34}
  local idx=1
  for i,v in ipairs(vals) do if v==cfg.walkSpeed then idx=i break end end
@@ -196,7 +199,11 @@ local walkVal=row("Скорость: "..cfg.walkSpeed.." (настройка)",f
  if cfg.speed then walk.Text="Ускорение ходьбы: "..cfg.walkSpeed end
 end)
 section("ДИАГНОСТИКА")
-local debugText="Ожидаю сканирования"
+local statusHoldUntil=0
+local function report(msg,seconds)
+ status.Text=msg
+ statusHoldUntil=os.clock()+(seconds or 7)
+end
 local debug=row("Проверить предметы / объекты",function()
  local backpack=player:FindFirstChildOfClass("Backpack")
  local tools={}
@@ -213,9 +220,8 @@ local debug=row("Проверить предметы / объекты",function(
    if #remotes>=5 then break end
   end
  end
- debugText="Tools: "..(#tools>0 and table.concat(tools,", ") or "(нет)")..
-  "\nRemotes (названия, не вызовы): "..(#remotes>0 and table.concat(remotes,", ") or "(не найдены)")
- status.Text=debugText:sub(1,235)
+ report(("Tools: "..(#tools>0 and table.concat(tools,", ") or "(нет)")..
+  "\nRemotes: "..(#remotes>0 and table.concat(remotes,", ") or "(не найдены)")):sub(1,235),12)
 end)
 local debugPrompts=row("Показать ближайшие взаимодействия",function()
  local me=getRoot()
@@ -234,11 +240,11 @@ local debugPrompts=row("Показать ближайшие взаимодейс
  table.sort(matches,function(a,b)return a.dist<b.dist end)
  local lines={}
  for i=1,math.min(#matches,4) do lines[#lines+1]=string.format("%s (%.0f)",matches[i].text,matches[i].dist) end
- status.Text="Рядом: "..(#lines>0 and table.concat(lines," | ") or "нет ProximityPrompt")
+ report("Рядом: "..(#lines>0 and table.concat(lines," | ") or "нет ProximityPrompt"),10)
 end)
 local copyInfo=row("Версия игры / статус",function()
- status.Text="PlaceId: "..tostring(game.PlaceId)..
- "\nСкрипт: v0.1 TEST • версия игры не проверена в исполнителе."
+ report("PlaceId: "..tostring(game.PlaceId)..
+ "\nСкрипт: v0.1 TEST • версия игры не проверена в исполнителе.",10)
 end)
 
 -- Drag by touch/mouse; never swallow game input outside the title bar.
@@ -468,7 +474,7 @@ task.spawn(function()
    for p in pairs(promptIndex) do
     if p.Parent then counts.prompts=counts.prompts+1 end
    end
-   if status and not debugText:find("Tools:",1,true) then
+   if status and os.clock()>statusHoldUntil then
     status.Text=string.format("Кирка: %s | Prompt API: %s\nESP: %d руда / %d лут / %d NPC\nУдары: %d | подбор: %d | prompts: %d",
        pickName,support,counts.ore,counts.loot,counts.npc,counts.swings,counts.collects,counts.prompts)
    end
