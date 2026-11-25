@@ -215,9 +215,16 @@ local debug=row("Проверить предметы / объекты",function(
  addTools(getChar());addTools(backpack)
  local remotes={}
  for _,v in ipairs(RS:GetDescendants()) do
-  if v:IsA("RemoteEvent") and tostring(v.Name):lower():match("mine|ore|fuel|drill|pickup|collect|harvest") then
-   remotes[#remotes+1]=v.Name
-   if #remotes>=5 then break end
+  if v:IsA("RemoteEvent") then
+   local lower=v.Name:lower()
+   local useful=false
+   for _,term in ipairs({"mine","ore","fuel","drill","pickup","collect","harvest"}) do
+    if lower:find(term,1,true) then useful=true break end
+   end
+   if useful then
+    remotes[#remotes+1]=v.Name
+    if #remotes>=5 then break end
+   end
   end
  end
  report(("Tools: "..(#tools>0 and table.concat(tools,", ") or "(нет)")..
@@ -310,9 +317,12 @@ local function hasWord(n,words)
 end
 local function classify(obj)
  if not obj or (not obj:IsA("BasePart") and not obj:IsA("Model")) then return nil end
+ if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then
+  if Players:GetPlayerFromCharacter(obj) then return nil end
+  return "npc"
+ end
  if myOrPlayerItem(obj) then return nil end
  local n=obj.Name:lower()
- if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") then return "npc" end
  if hasWord(n,lootWords) then return "loot" end
  if hasWord(n,oreWords) then return "ore" end
  return nil
