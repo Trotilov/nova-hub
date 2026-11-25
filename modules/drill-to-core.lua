@@ -293,6 +293,7 @@ local function findTool()
    end
   end
  end
+ end
  table.sort(matches,function(a,b)return a.score>b.score end)
  return matches[1] and matches[1].obj or nil
 end
